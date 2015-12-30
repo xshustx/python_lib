@@ -60,6 +60,7 @@ class READER:
         for b in bytes.fromhex(apdustr):
             apdulist.append(b)
         data, sw1, sw2, = self.readerhandle.transmit(apdulist)
+        # print("data", data)
         resp = bytes()
         for i in data:
             resp += i.to_bytes(1, 'big')
