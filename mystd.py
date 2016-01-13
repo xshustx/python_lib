@@ -165,3 +165,194 @@ def decodeblue64(data):
             print('need ', b, b.hex())
     org = codecs.decode(std64, 'base64').hex().upper()
     return org
+
+
+class svn_release:
+    __fw_word = '已测固件'
+    __key_word = '已测密钥'
+    __pp_word = '已测预个人化'
+    __name_word = '_密钥文件'
+
+    def set(self, k1, k2, k3, k4):
+        self.__fw_word = k1
+        self.__key_word = k2
+        self.__pp_word = k3
+        self.__name_word = k4
+
+    def __svnls(self, url, dirname):
+        import subprocess
+        cmd_p = 'cmd.exe /k '
+        svn_cmd = 'svn ls '
+        cmd = cmd_p + svn_cmd + url
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        dirname.clear()
+        for line in p.stdout.readlines():
+            if line == b'\r\n':
+                break
+            dirname.extend([line[:-2]])
+
+    def __svnmkdir(self, url):
+        import subprocess
+        cmd_p = 'cmd.exe /k '
+        svn_cmd = 'svn mkdir '
+        log = ' -m "script make"'
+        cmd = cmd_p + svn_cmd + url + log
+        print(cmd)
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        for line in p.stdout.readlines():
+            if line == b'\r\n':
+                break
+            print(line.decode('cp936')[:-2])
+
+    def __svncp(self, src, dst):
+        import subprocess
+        cmd_p = 'cmd.exe /k '
+        svn_cmd = 'svn cp '
+        log = ' -m "script make"'
+        cmd = cmd_p + svn_cmd + src + ' ' + dst + log
+        print(cmd)
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        for line in p.stdout.readlines():
+            if line == b'\r\n':
+                break
+            print(line.decode('cp936')[:-2])
+
+    def __search(self, dirlist, keyword):
+        for x in dirlist:
+            if keyword in x:
+                return x
+        return None
+
+    def __getalldir(self, url, dirlist, path=True):
+        '''
+        只保留文件夹
+        文件会被过滤掉
+        '''
+        dirname = list()
+        self.__svnls(url, dirname)
+        dirlist.clear()
+        i = 0
+        for x in dirname:
+            x = x.decode('cp936')
+            # print(i, x)
+            if '/' in x:
+                if path is True:
+                    a = url + x
+                else:
+                    a = x[:-1]
+                i += 1
+                # new = strcut(x, keyword)print(i, a)
+                dirlist.extend([a])
+
+    def __strcut(self, string, cut):
+        p1 = string.find(cut)
+        p2 = p1 + len(cut)
+        return string[:p1] + string[p2:]
+
+    def svn_release_one(self, rootpath, destpath, do=False):
+        '''
+        从rootpath中找到名称中包含__fw_word，__key_word， __pp_word关键字的文件夹
+
+        从destpath找到所有文件夹名
+
+        从__key_word文件夹中去掉__name_word作为名称，对比destpah中所有文件夹...
+
+        ...缺失的，创建，并copy __fw_word, __pp_word 所有文件夹， copy __key_word
+        中对应文件夹。
+
+        '''
+        # print('search root path dir name:')
+        rootpathlist = list()
+        self.__getalldir(rootpath, rootpathlist)
+        # print(rootpathlist)
+
+        fw = self.__search(rootpathlist, self.__fw_word)
+        if fw is None:
+            return []
+
+        key = self.__search(rootpathlist, self.__key_word)
+        if key is None:
+            return []
+
+        pp = self.__search(rootpathlist, self.__pp_word)
+        if pp is None:
+            return []
+
+        # print('\n---------------------定位到固件，密钥文件和预个人化文件目录：')
+        # print(fw)
+        # print(key)
+        # print(pp)
+
+        # print('\n\r获取固件文件夹列表：')
+        fwlist = list()
+        self.__getalldir(fw, fwlist)
+        # print(fwlist)
+
+        # print('\n\r获取预个人化文件夹列表：')
+        pplist = list()
+        self.__getalldir(pp, pplist)
+        # print(pplist)
+
+        # print('\n\r获取密钥文件夹列表：')
+        keylist = list()
+        self.__getalldir(key, keylist, False)
+
+        # print('\n\r已经发布的文件：')
+        destpathlist = list()
+        self.__getalldir(destpath, destpathlist, False)
+
+        newdolist = list()
+        for x in keylist:
+            keyword = self.__name_word
+            if keyword not in x:
+                continue  # 非密钥文件
+
+            new = self.__strcut(x, keyword)
+            # print('\n\r生成软件生产包名：', new)
+
+            if new in destpathlist:
+                continue  # 已经发布
+
+            print('\n\r未发布的文件名：', new)
+            destnew = destpath + new
+            newdolist.extend([destnew])
+
+            print('\n\r创建svn目录：')
+            if do is True:
+                self.__svnmkdir(destnew)
+            # copy fireware
+            srcs = ''
+            for one in fwlist:
+                # print(one)
+                srcs += one + ' '
+            for one in pplist:
+                # print(one)
+                srcs += one + ' '
+            # 最后是密钥文件
+            print(key+x)
+            srcs += key + x
+
+            print('\n\rcopy svn目录：')
+            if do is True:
+                self.__svncp(srcs, destnew)
+
+        if newdolist != []:
+            print('\r\n本次新做：')
+            for x in newdolist:
+                print(x)
+        return newdolist
+
+    def svn_realse_all(self, rootpath, destpath, do=False):
+        alist = list()
+        self.__getalldir(rootpath, alist)
+        for x in alist:
+            print(x)
+
+        total = list()
+        for x in alist:
+            a = self.svn_release_one(x, destpath, do)
+            total += a
+        print('\r\n====================本次新做：')
+        for x in total:
+            print(x)
+        return total
