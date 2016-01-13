@@ -297,6 +297,10 @@ class svn_release:
         keylist = list()
         self.__getalldir(key, keylist, False)
 
+        # 可能没有文件只有框架，就无需发布
+        if fwlist == [] or pplist == [] or keylist == []:
+            return []
+
         # print('\n\r已经发布的文件：')
         destpathlist = list()
         self.__getalldir(destpath, destpathlist, False)
