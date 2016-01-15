@@ -346,17 +346,27 @@ class svn_release:
                 print(x)
         return newdolist
 
-    def svn_realse_all(self, rootpath, destpath, do=False):
+    def svn_release_all(self, rootpath, destpath, do=False):
         alist = list()
         self.__getalldir(rootpath, alist)
         for x in alist:
             print(x)
-
         total = list()
         for x in alist:
             a = self.svn_release_one(x, destpath, do)
             total += a
-        print('\r\n====================本次新做：')
-        for x in total:
-            print(x)
+        # print('\r\n====================本次新做：')
+        # for x in total:
+        #     print(x)
         return total
+
+    def svn_release_mul(self, dicts, do=False):
+        mul = list()
+        for x in dicts:
+            print('\n'+x, dicts[x])
+            a = self.svn_release_all(x, dicts[x], do)
+            mul += a
+        print('\r\n====================本次新做：')
+        for x in mul:
+            print(x)
+        return mul
