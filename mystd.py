@@ -370,3 +370,57 @@ class svn_release:
         for x in mul:
             print(x)
         return mul
+
+
+class ivtlic:
+    '''
+    default port = 'com3'
+    default uid = '3101FF19045033475837363030046B97'
+    '''
+    uid = '3101FF19045033475837363030046B97'
+    port = 'com3'
+    __com = None
+    left = None
+
+    def open(self):
+        import serial
+        ser = serial.Serial()
+        ser.port = self.port
+        ser.baudrate = 115200
+        ser.timeout = 1
+        ser.open()
+        self.__com = ser
+
+    def lic(self, mac):
+        flag = 'LICENSE '
+        head = 'AT+TTOOL:LICENSE:'
+        end = '\r\n'
+        cmds = head + self.uid + mac + end
+        cmd = cmds.encode()
+        self.__com.write(cmd)
+        rsp = self.__com.read(100)
+        rsps = rsp.decode()
+        # rsps = '\r\n+TTOOL:LICENSE 1f4b127e263395b5abd4dfe0cb1b79bffd814abd16f6b3713b5f6a628d2f9084,9997\r\n'
+        if flag in rsps:
+            n = rsps.find(flag) + len(flag)
+            m = rsps.find(',')
+            self.left = rsps[m+1:m+5]
+            new = rsps[n:m].upper()
+        # print(new)
+        return new
+
+    def autolic(self, mac, count, file_handle):
+        sn = int.from_bytes(bytes.fromhex(mac), 'big')
+        eint = sn + count
+        while sn < eint:
+            mac = sn.to_bytes(6, 'big').hex().upper()
+            sn += 1
+            lic = self.lic(mac)
+            line = mac + ' ' + lic
+            print(line, self.left)
+            file_handle.write(line + '\n')
+
+    def close(self):
+        if self.__com is not None:
+            self.__com.close()
+
