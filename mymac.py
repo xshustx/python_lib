@@ -1,22 +1,7 @@
 from mylib import mydes
+from mylib import mystd
 
-
-def xor(data0, data1):
-        '''
-        data0 is hex string
-        data1 is hex string
-        len(data0) == len(data1)
-        '''
-        data0 = bytes.fromhex(data0)
-        data1 = bytes.fromhex(data1)
-        count = 0
-        xordata = b''
-        for x in data0:
-            # print(x, data1[count])
-            xordata += (x ^ data1[count]).to_bytes(1, 'big')
-            count += 1
-        return xordata.hex().upper()
-
+xor = mystd.xor
 
 def pinblock(track2, pin, pik):
     '''

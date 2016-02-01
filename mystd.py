@@ -4,6 +4,23 @@
 import sys
 
 
+def xor(data0, data1):
+        '''
+        data0 is hex string
+        data1 is hex string
+        len(data0) == len(data1)
+        '''
+        data0 = bytes.fromhex(data0)
+        data1 = bytes.fromhex(data1)
+        count = 0
+        xordata = b''
+        for x in data0:
+            # print(x, data1[count])
+            xordata += (x ^ data1[count]).to_bytes(1, 'big')
+            count += 1
+        return xordata.hex().upper()
+
+
 class RedirectionStdout:
 
     '''
@@ -249,7 +266,7 @@ class svn_release:
         p2 = p1 + len(cut)
         return string[:p1] + string[p2:]
 
-    def svn_release_one(self, rootpath, destpath, do=False):
+    def __svn_release_one(self, rootpath, destpath, destpathlist=None, do=False):
         '''
         从rootpath中找到名称中包含__fw_word，__key_word， __pp_word关键字的文件夹
 
@@ -301,9 +318,13 @@ class svn_release:
         if fwlist == [] or pplist == [] or keylist == []:
             return []
 
-        # print('\n\r已经发布的文件：')
-        destpathlist = list()
-        self.__getalldir(destpath, destpathlist, False)
+        # 已发布文件
+        if destpathlist is None:
+            destpathlist = list()
+            self.__getalldir(destpath, destpathlist, False)
+            print("\n已发布：")
+            for x in destpathlist:
+                print(x)
 
         newdolist = list()
         for x in keylist:
@@ -352,8 +373,16 @@ class svn_release:
         for x in alist:
             print(x)
         total = list()
+
+        # print('\n\r已经发布的文件：')
+        destpathlist = list()
+        self.__getalldir(destpath, destpathlist, False)
+        print("\n已发布：", len(destpathlist))
+        for x in destpathlist:
+            print(x)
+
         for x in alist:
-            a = self.svn_release_one(x, destpath, do)
+            a = self.__svn_release_one(x, destpath, destpathlist, do)
             total += a
         # print('\r\n====================本次新做：')
         # for x in total:
@@ -424,3 +453,173 @@ class ivtlic:
         if self.__com is not None:
             self.__com.close()
 
+
+class COMM_MPOS:
+    # parament--------------------
+    _trade_mount = '000000000001'
+    _trade_time = '151215161750'
+    _trade_type = '30'
+    _trade_timeout = '2a'
+    _pinblock = '06123456ffffffff'
+    _pin_timeout = '2a'
+    _logfile = None
+    _device = 0
+    __send = None
+    __resp = None
+    __pn = None
+    __pm = None
+
+    def __lclen(self, string):
+        lenth = len(string)//2
+        # print('lenth', lenth)
+        if lenth > 255:
+            lc = lenth.to_bytes(3, 'big')
+        else:
+            lc = lenth.to_bytes(1, 'big')
+        return lc.hex()
+
+    def __parament_paser(self, data):
+        m = {}
+        value_list = (('ver_name',                 4),
+                      ('trade_ins',                1),
+                      ('pin_ins',                  1),
+                      ('mac_ins',                  1),
+                      ('masterkey_updata_ins',     1),
+                      ('random_fixed_tag1',        1),
+                      ('random_out_tag2',          1),
+                      ('random_in_tag3',           1),
+                      ('random_format',           16),
+                      ('down_trade_op1',           1),
+                      ('down_trade_op2',           1),
+                      ('input_pin_timeout',        1),
+                      ('trade_sn',                 1),
+                      ('msc_format',               1),
+                      ('ic_td2_format',            1),
+                      ('ic_f55_format',            1),
+                      ('mac_format',               1),
+                      ('masterkey_updata_format',  1),
+                      ('workkey_updata_format',    1),
+                      ('tdk_index',                1),
+                      ('pik_index',                1),
+                      ('mak_index',                1),
+                      ('f55_tag',                 60),
+                      ('reserved_50',             10),
+                      ('trade_sn_tag',             1),
+                      ('pan_format',               1),
+                      ('crc16',                    2))
+        for x in value_list:
+            lenth = x[1] * 2
+            if len(data) < lenth:
+                return None
+            m[x[0]] = data[:lenth]
+            # print(x[0], data[:lenth])
+            data = data[lenth:]
+        return m
+
+    # add file log-----------------------
+    def init(self):
+        from mylib import myreader
+        import random
+        if self._logfile is not None:
+            filelog = RedirectionStdout()
+            filelog.print_to_file(self._logfile)
+
+        # mpos prepare------------------------
+        mpos = myreader.READER()
+        mpos.debug = True
+        if mpos.connect(self._device) is None:
+            print('can not find mpos!')
+            return
+        mpos.reset()
+        self.__send = mpos.exchange
+        self.__resp = mpos.resp
+
+        # --------------------read paraments--------------------
+        read_para = 'f08a010000'
+        self.__send(read_para)
+        self.__pm = self.__parament_paser(self.__resp[0])
+        if self.__pm is None:
+            print('Get paraments fail!')
+            return
+
+        # --------------------prepare random--------------------
+        count = 0
+        for x in bytes.fromhex(self.__pm['random_format']):
+            if x == bytes.fromhex(self.__pm['random_out_tag2'])[0]:
+                count += 1
+
+        if count > 0:
+            rand = random.Random()
+            rr = rand.random
+            self._randnum = str(rr())[-8:] + str(rr())[-8:]
+            self._randnum = rand[-count:]
+        else:
+            self._randnum = ''
+
+        # --------------------read sn--------------------
+        read_sn = 'f0b0000000'
+        self.__send(read_sn)
+
+        # --------------------read mac--------------------
+        read_mac = 'f0cf010000'
+        self.__send(read_mac)
+
+        # --------------------read pn--------------------
+        read_pn = 'fe01010300'
+        self.__send(read_pn)
+        self.__pn = bytes.fromhex(self.__resp[0][4:]).decode()
+        print(self.__pn)
+
+    # --------------------trade--------------------
+    def trade(self):
+        if self.__send is None:
+            print('error, need init')
+            return None
+        cmd_data = self._trade_mount + self._trade_time + self._trade_type + self._trade_timeout
+        trade_cmd = 'f0' + self.__pm['trade_ins'] + '0007' + self.__lclen(cmd_data) + cmd_data
+        cmd_data += self._randnum
+        self.__send(trade_cmd)
+
+        if self.__resp[1] != '9000':
+            print('error', self.__resp[1])
+            return self.__resp[0]
+
+    # --------------------input pin--------------------
+    def pin(self):
+        if self.__send is None:
+            print('error, need init')
+            return None
+        p1p2 = '0000'
+        if '63250' in self.__pn:
+            p1p2 = '00ff'
+            cmd_data = self._pinblock + self._randnum
+        elif self.__pm['input_pin_timeout'] == '00':
+            cmd_data = self._randnum
+        else:
+            cmd_data = self._pin_timeout + self._randnum
+
+        input_pin_cmd = 'f0' + self.__pm['pin_ins'] + p1p2 + self.__lclen(cmd_data) + cmd_data
+        self.__send(input_pin_cmd)
+
+        if self.__resp[1] != '9000':
+            print('error', self.__resp[1])
+            return self.__resp[0]
+
+    # --------------------trade over--------------------
+    def over(self):
+        if self.__send is None:
+            print('error, need init')
+            return None
+        trade_over_cmd = 'f0d4000000'
+        self.__send(trade_over_cmd)
+
+    def trans_cmd(self, cmd):
+        if self.__send is None:
+            print('error, need init')
+            return None
+        self.__send(cmd)
+        return self.__resp
+
+    # show('f0c2000200')  # 接触卡
+    # show('f0c2000300')  # 非接
+    # show('f0c2000400')  # psam
