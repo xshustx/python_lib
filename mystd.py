@@ -21,6 +21,10 @@ def xor(data0, data1):
         return xordata.hex().upper()
 
 
+def cut(data, n):
+        return data[:n], data[n:]
+
+
 class RedirectionStdout:
 
     '''
@@ -64,8 +68,7 @@ def paserTlv(data):
     value
     return [(tag, lens, value), (tag, lens, value), ...]
     '''
-    def cut(data, n):
-        return data[:n], data[n:]
+    
 
     def s2i(string):
         return int.from_bytes(bytes.fromhex(string), 'big')
