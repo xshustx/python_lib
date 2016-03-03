@@ -192,6 +192,12 @@ class svn_release:
     __key_word = '已测密钥'
     __pp_word = '已测预个人化'
     __name_word = '_密钥文件'
+    cmd_p = 'cmd.exe /c '
+    # total = list()
+
+    def __init__(self):
+        self.total = list()
+        # self.multotal = list()
 
     def set(self, k1, k2, k3, k4):
         self.__fw_word = k1
@@ -201,11 +207,13 @@ class svn_release:
 
     def __svnls(self, url, dirname):
         import subprocess
-        cmd_p = 'cmd.exe /k '
         svn_cmd = 'svn ls '
-        cmd = cmd_p + svn_cmd + url
+        cmd = self.cmd_p + svn_cmd + url
+        # print(cmd)
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         dirname.clear()
+        p.wait()
+        # print('cmd over')
         for line in p.stdout.readlines():
             if line == b'\r\n':
                 break
@@ -213,10 +221,9 @@ class svn_release:
 
     def __svnmkdir(self, url):
         import subprocess
-        cmd_p = 'cmd.exe /k '
         svn_cmd = 'svn mkdir '
         log = ' -m "script make"'
-        cmd = cmd_p + svn_cmd + url + log
+        cmd = self.cmd_p + svn_cmd + url + log
         print(cmd)
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line in p.stdout.readlines():
@@ -226,10 +233,9 @@ class svn_release:
 
     def __svncp(self, src, dst):
         import subprocess
-        cmd_p = 'cmd.exe /k '
         svn_cmd = 'svn cp '
         log = ' -m "script make"'
-        cmd = cmd_p + svn_cmd + src + ' ' + dst + log
+        cmd = self.cmd_p + svn_cmd + src + ' ' + dst + log
         print(cmd)
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line in p.stdout.readlines():
@@ -316,6 +322,7 @@ class svn_release:
         # print('\n\r获取密钥文件夹列表：')
         keylist = list()
         self.__getalldir(key, keylist, False)
+        # print(keylist)
 
         # 可能没有文件只有框架，就无需发布
         if fwlist == [] or pplist == [] or keylist == []:
@@ -335,6 +342,11 @@ class svn_release:
             if keyword not in x:
                 continue  # 非密钥文件
 
+            p2 = x.find(keyword)
+            p1 = x[:p2].rfind('_') + 1
+            cname = x[p1:p2]
+            # print('cname', cname)
+
             new = self.__strcut(x, keyword)
             # print('\n\r生成软件生产包名：', new)
 
@@ -348,13 +360,22 @@ class svn_release:
             print('\n\r创建svn目录：')
             if do is True:
                 self.__svnmkdir(destnew)
-            # copy fireware
+
             srcs = ''
+            # copy fireware
             for one in fwlist:
-                # print(one)
+                print(one)
                 srcs += one + ' '
+            # copy 预个人化文件
             for one in pplist:
-                # print(one)
+                if len(pplist) > 1:
+                    p1 = one.find(cname)
+                    if p1 < 0:
+                        continue
+                    p2 = p1 + len(cname)
+                    if one[p2] != '_':
+                        continue
+                print(one)
                 srcs += one + ' '
             # 最后是密钥文件
             print(key+x)
@@ -368,6 +389,7 @@ class svn_release:
             print('\r\n本次新做：')
             for x in newdolist:
                 print(x)
+        self.total += newdolist
         return newdolist
 
     def svn_release_all(self, rootpath, destpath, do=False):
@@ -380,9 +402,9 @@ class svn_release:
         # print('\n\r已经发布的文件：')
         destpathlist = list()
         self.__getalldir(destpath, destpathlist, False)
-        print("\n已发布：", len(destpathlist))
-        for x in destpathlist:
-            print(x)
+        # print("\n已发布：", len(destpathlist))
+        # for x in destpathlist:
+        #     print(x)
 
         for x in alist:
             a = self.__svn_release_one(x, destpath, destpathlist, do)
@@ -392,16 +414,64 @@ class svn_release:
         #     print(x)
         return total
 
+    def svn_release_allp(self, rootpath, destpath, do=False):
+        from threading import Thread
+        threadlist = []
+
+        alist = list()
+        self.__getalldir(rootpath, alist)
+        for x in alist:
+            print(x)
+
+        # print('\n\r已经发布的文件：')
+        destpathlist = list()
+        self.__getalldir(destpath, destpathlist, False)
+        # print("\n已发布：", len(destpathlist))
+        # for x in destpathlist:
+        #     print(x)
+        for x in alist:
+            p = Thread(target=self.__svn_release_one, args=(x, destpath, destpathlist, do))
+            # a = self.__svn_release_one(x, destpath, destpathlist, do)
+            threadlist.append(p)
+            p.start()
+        # print('\r\n====================本次新做：')
+        # for x in total:
+        #     print(x)
+        for x in threadlist:
+            x.join()
+        # print('2', self.total)
+        return self.total
+
     def svn_release_mul(self, dicts, do=False):
         mul = list()
         for x in dicts:
-            print('\n'+x, dicts[x])
-            a = self.svn_release_all(x, dicts[x], do)
+            print('\n********\n'+x)
+            print(dicts[x]+'\n')
+            a = self.svn_release_allp(x, dicts[x], do)
             mul += a
-        print('\r\n====================本次新做：')
+        print('\r\n====================本次新做：====================')
         for x in mul:
             print(x)
+        self.multotal += mul
         return mul
+
+    def svn_release_mulp(self, dicts, do=False):
+        from threading import Thread
+        threadlist = []
+        self.total.clear()
+        for x in dicts:
+            print('\n********\n'+x)
+            print(dicts[x]+'\n')
+            # a = self.svn_release_allp(x, dicts[x], do)
+            p = Thread(target=self.svn_release_allp, args=(x, dicts[x], do))
+            threadlist.append(p)
+            p.start()
+        for x in threadlist:
+            x.join()
+        print('\r\n====================本次新做：====================')
+        for x in self.total:
+            print(x)
+        return self.total
 
 
 class ivtlic:
